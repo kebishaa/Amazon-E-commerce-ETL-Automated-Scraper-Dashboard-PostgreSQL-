@@ -1,0 +1,8 @@
+FROM apache/airflow:3.0.1
+
+# Install Python packages as root
+USER root
+RUN pip install --no-cache-dir beautifulsoup4 requests pandas sqlalchemy psycopg2-binary python-dotenv lxml
+
+# Switch back to airflow user
+USER airflow
