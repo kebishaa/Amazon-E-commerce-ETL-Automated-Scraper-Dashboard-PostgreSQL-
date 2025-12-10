@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: amazon_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  pgadmin:
+    image: dpage/pgadmin4:7
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres
+
+  airflow:
+    image: apache/airflow:3.0.1
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/amazon_db
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+      _PIP_ADDITIONAL_REQUIREMENTS: "beautifulsoup4 requests pandas sqlalchemy psycopg2-binary python-dotenv lxml"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./scraper:/opt/airflow/scraper
+      - ./database:/opt/airflow/database
+    ports:
+      - "8081:8080"
+    depends_on:
+      - postgres
+    command: >
+      bash -c "
+        airflow db migrate &&
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com \
+          --password admin || true &&
+        airflow webserver &
+        airflow scheduler
+      "
+    restart: unless-stopped
+
+  streamlit:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./dashboard:/app
+    environment:
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DB: amazon_db
+      PG_USER: postgres
+      PG_PASSWORD: postgres
+    depends_on:
+      - postgres
+    ports:
+      - "8501:8501"
+    command: >
+      bash -c "
+        pip install --no-cache-dir sqlalchemy psycopg2-binary pandas python-dotenv streamlit &&
+        streamlit run app.py --server.port 8501 --server.runOnSave true
+      "
+
+volumes:
+  pgdata:
